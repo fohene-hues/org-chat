@@ -1,11 +1,17 @@
-import uvicorn
-from src.app import app
-from src.config import settings
+from fastapi import FastAPI, Depends
+from database import create_db_and_tables
+from auth_controller import router as auth_router
 
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=3090,
-        reload=settings.DEBUG
-    )
+app = FastAPI(title="OrgChat - Auth Service")
+
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
