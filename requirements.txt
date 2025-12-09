@@ -1,8 +1,2 @@
 fastapi
 uvicorn[standard]
-fastapi-jwt-auth
-python-jose
-PyJWT
-passlib
-sqlmodel
-SQLAlchemy

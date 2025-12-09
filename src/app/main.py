@@ -6,8 +6,8 @@ import sys
 import os
 
 
-from routes import base_routes
-
+from app.routes import base_routes
+from app.auth.controller.auth_controller import auth_router
 
 from config import settings
 from fastapi.exceptions import RequestValidationError
@@ -63,6 +63,7 @@ app.add_middleware(
 # Routes Registration
 
 app.include_router(base_routes, prefix="/api/v1", tags=["Base Routes"])
+app.include_router(auth_router, prefix="/api/v1", tags=["Auth"])
 
 # JWT Authentication Settings
 
