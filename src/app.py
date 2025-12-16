@@ -5,11 +5,19 @@ from pydantic import BaseSettings
 import sys
 import os
 
+# Add the current directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import exceptions
 from routes import base_routes
+from core.auth.controller.authcontroller import auth_routes
+from core.user.controller.usercontroller import user_routes
+from core.cloudstorage.controller.storagecontoller import storage_routes
+from core.notification.controller.notificationcontroller import notification_routes
 
-
+from utilities.dbconfig import Base, engine
 from config import settings
+from utilities.exceptions import DatabaseValidationError
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import inspect
 
@@ -17,10 +25,22 @@ from loguru import logger
 import logging
 from contextlib import asynccontextmanager
 
+
+# Initialize FastAPI with lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown"""
+    # Startup
+    logger.info("[APP_STARTUP] Application starting...")
+    yield
+    # Shutdown
+    logger.info("[APP_SHUTDOWN] Application shutting down...")
+
+
 app = FastAPI(
     title=settings.SERVICE_NAME,
     version="1.0",
-    description="""**Org Chat** An AI focused app infrastructure deployed with python.
+    description="""**Lebe Core API** An AI focused app infrastructure deployed with python.
 
     Default Endpoints:
     - Authentication
@@ -30,17 +50,14 @@ app = FastAPI(
     """,
     contact={
         "name": "API Support",
-        "url": "http://support@orgchat.com",
-        "email": "mail@orgchat.com",
+        "url": "http://support@lebe.com",
+        "email": "mail@lebe.com",
     },
     license_info={
         "name": "MIT",
-    }
+    },
+    lifespan=lifespan
 )
-
-
-# REMOVE auto table creation (Alembic will handle this)
-
 
 # print("Initializing database tables...")
 # Base.metadata.create_all(bind=engine)
@@ -60,9 +77,16 @@ app.add_middleware(
 
 # Exception Handlers
 
+app.add_exception_handler(DatabaseValidationError, exceptions.database_validation_exception_handler)
+app.add_exception_handler(RequestValidationError, exceptions.validation_exception_handler)
+
 # Routes Registration
 
 app.include_router(base_routes, prefix="/api/v1", tags=["Base Routes"])
+app.include_router(storage_routes, prefix="/api/v1/storage", tags=["Storage Routes"])
+app.include_router(auth_routes, prefix="/api/v1/auth", tags=["Auth Routes"])
+app.include_router(user_routes, prefix="/api/v1/user", tags=["User Routes"])
+app.include_router(notification_routes, prefix="/api/v1/notification", tags=["Notification Routes"])
 
 # JWT Authentication Settings
 

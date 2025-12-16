@@ -1,54 +1,101 @@
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from datetime import datetime
 from typing import List, Optional
+from pydantic import BaseModel
+from core.auth.service.sessiondriver import SessionDriver, TokenData
+from fastapi_jwt_auth import AuthJWT
+from core.exceptions import *
+from utilities.dbconfig import SessionLocal
+from sqlalchemy.orm import Session
+from core.user.model.User import User
+import logging
 
-from sqlmodel import Session, select
-from passlib.context import CryptContext
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-from ..model.user import User, Role, Permission, RolePermissionLink
-from .schemas import UserCreate, RoleCreate, PermissionCreate
+# DTO Models
+from core.user.dto.request.user_filter_request import UserFilterRequest
+from core.user.dto.response.message_response import MessageResponse
+from core.user.dto.response.user_response import UserResponse
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Service Class
+class UserService:
+    def __init__(self, db: Session):
+        self.db = db
 
-# user
-def create_user(db: Session, user_in: UserCreate) -> User:
-    hashed = pwd_context.hash(user_in.password)
-    user = User(
-        username=user_in.username,
-        email=user_in.email,
-        name=user_in.name,
-        department=user_in.department,
-        hashed_password=hashed,
-        role_id=user_in.role_id,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    def get_current_user(self, email: str) -> UserResponse:
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            is_active=user.is_active,
+            created_at=user.created_at
+        )
 
+    def get_user_by_id(self, user_id: str) -> UserResponse:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            is_active=user.is_active,
+            created_at=user.created_at
+        )
 
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    statement = select(User).where(User.email == email)
-    result = db.exec(statement).first()
-    return result
+    def set_user_enabled_status(self, user_id: str, enabled: bool) -> MessageResponse:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.is_active = enabled
+        self.db.commit()
+        status_msg = "enabled" if enabled else "disabled"
+        return MessageResponse(message=f"User {status_msg} successfully")
 
+    def delete_user(self, user_id: str) -> MessageResponse:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        self.db.delete(user)
+        self.db.commit()
+        return MessageResponse(message="User deleted successfully")
 
-# role + permission helpers
-def create_permission(db: Session, p_in: PermissionCreate) -> Permission:
-    perm = Permission(name=p_in.name, description=p_in.description)
-    db.add(perm)
-    db.commit()
-    db.refresh(perm)
-    return perm
+    def get_all_users_paged(self, page: int, size: int):
+        query = self.db.query(User)
+        total = query.count()
+        users = query.offset((page - 1) * size).limit(size).all()
+        
+        return {
+            "total": total,
+            "page": page,
+            "size": size,
+            "users": [
+                UserResponse(
+                    id=user.id,
+                    username=user.username,
+                    email=user.email,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    is_active=user.is_active,
+                    created_at=user.created_at
+                ) for user in users
+            ]
+        }
 
-
-def create_role(db: Session, r_in: RoleCreate) -> Role:
-    role = Role(name=r_in.name, description=r_in.description)
-    db.add(role)
-    db.commit()
-   
-    if r_in.permission_ids:
-        perms = db.exec(select(Permission).where(Permission.id.in_(r_in.permission_ids))).all()
-        role.permissions = perms
-        db.add(role)
-        db.commit()
-        db.refresh(role)
-    return role
+    def update_user_role(self, user_id: str, role_id: str) -> MessageResponse:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        # Assuming you have role update logic here
+        user.role_id = role_id
+        self.db.commit()
+        return MessageResponse(message="User role updated successfully")
