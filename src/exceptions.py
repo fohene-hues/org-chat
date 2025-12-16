@@ -16,3 +16,6 @@ async def database_validation_exception_handler(request: Request, exc: DatabaseV
 
 class ObjectDoesNotExist(Exception):
     pass
+
+# Alias the FastAPI request handler so `app.py` can import `validation_exception_handler`
+validation_exception_handler = request_validation_exception_handler
